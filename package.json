@@ -2,14 +2,22 @@
   "name": "comments-migration",
   "version": "0.0.0",
   "private": true,
-  "scripts": {},
+  "scripts": {
+    "test": "mocha",
+    "cover": "node_modules/.bin/istanbul cover ./node_modules/mocha/bin/_mocha",
+    "coveralls": "npm run cover -- --report lcovonly && cat ./coverage/lcov.info | coveralls"
+  },
   "dependencies": {
+    "async": "^2.6.0",
     "body-parser": "~1.18.2",
     "fs-extra": "^5.0.0",
     "request": "^2.83.0",
-    "request-promise": "^4.2.2",
+    "request-promise": "^4.2.2"
   },
   "devDependencies": {
-    "mocha": "^5.0.1"
+    "coveralls": "^3.0.0",
+    "istanbul": "^0.4.5",
+    "mocha": "^5.0.1",
+    "mocha-lcov-reporter": "^1.3.0"
   }
 }

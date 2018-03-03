@@ -6,10 +6,27 @@
 
 
 const app = require('../app');
-const assert  = require('assert');
+const async = require('async');
+const assert = require('assert');
 
 describe('app 테스트', () => {
     describe('유틸 테스트', () => {
+        it("async.js로 동기실행", (done) => {
+            const times = [1000, 500, 100];
+            const callStack = [];
+            async.eachSeries(times, (time, next) => {
+                setTimeout(()=>{
+                    callStack.push(time);
+                    return next();
+                }, time);
+            }, () => {
+                assert.equal(callStack[0], 1000);
+                assert.equal(callStack[1], 500);
+                assert.equal(callStack[2], 100);
+                done();
+            });
+        });
+
         it('인코딩', () => {
             const unicode = '\uc5ed\uc2dc \ube60\ub974\uace0 \uc0dd\uc0dd\ud55c \ud6c4\uae30 \uc798 \ubd24\uc2b5\ub2c8\ub2e4.\\r\\n\ub9e4\ubc88 \ub3d9\uc6b1\ub2d8 \ube14\ub85c\uadf8 \ud1b5\ud574\uc11c \ub3c4\uc6c0 \ub9ce\uc774 \ubc1b\uace0 \uc788\uc5c8\ub294\ub370 \uc5b4\uc81c\ub294 \uc9c1\uc811 \ub9cc\ub098\uac8c \ub418\uc11c \ubc18\uac00\uc6e0\uc2b5\ub2c8\ub2e4.\\r\\n\uc880 \ub354 \uc598\uae30\ub97c \ub098\ub204\uace0 \uc2f6\uc5c8\ub294\ub370 \uc544\uc27d\ub354\ub77c\uad6c\uc694. \ub098\uc911\uc5d0 \uc5f0\ub77d\ub4dc\ub9ac\uace0 \uc7a0\uc2e4\ub85c \ud568 \ucc3e\uc544\uac08\uaed8\uc694.^^\\r\\n';
             const buffer = new Buffer(unicode, 'utf8');
@@ -111,10 +128,9 @@ describe('app 테스트', () => {
             ];
 
             const result = app.sort(comments);
-            assert.equal(result['15202882'].child.length, 1);
-            assert.equal(result['15202975'].child.length, 1);
-            assert.equal(result['15206535'].child.length, 0);
-            assert.equal(result['15206615'].child.length, 3);
+            assert.equal(result.length, 9);
+            assert.equal(result[0].id, '15202882');
+            assert.equal(result[1].id, '15206536');
         });
     });
 
