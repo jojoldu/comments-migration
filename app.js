@@ -6,7 +6,6 @@
 
 const request = require('request-promise');
 const fs = require('fs-extra');
-const async = require('async');
 const asyncp = require('async-promises');
 
 /**
@@ -40,11 +39,18 @@ function execute() {
         })
         .then(posts => {
             const lastId = JSON.parse(posts).tistory.item.posts[0].id;
-            console.log(lastId);
-
+            const postIds = [];
             for(let i=1; i<=lastId; i++){
-                createGithubIssueAndComments(i, globalToken);
+                postIds.push(i);
             }
+
+            return asyncp.eachSeries(postIds, (postId) => {
+                return createGithubIssueAndComments(postId, globalToken);
+            });
+
+        })
+        .then(() => {
+            console.log('Migration Finished!');
         })
         .catch((err) => {
             console.log(err);
@@ -72,11 +78,11 @@ function createGithubIssueAndComments(postId, tokenJson) {
     let comments;
     return getTistoryComments(postId, tokenJson)
         .then(body => {
-            comments = sort(body.tistory.item.comments);
-            /**
-             * 1) Github 이슈 생성
-             * 2) comments로 이슈 댓글 추가
-             */
+            const notSorted = JSON.parse(body).tistory.item.comments;
+            if(!notSorted || notSorted.length === 0){
+                throw new Error(postId+'는 댓글이 없는 포스팅입니다.');
+            }
+            comments = sort(notSorted);
             return getOrCreateGithubIssue(postId, tokenJson);
         })
         .then(body => {
@@ -87,7 +93,7 @@ function createGithubIssueAndComments(postId, tokenJson) {
             console.log(tokenJson.tistory.blogName+'.tistory.com/'+postId+' Migration 성공');
         })
         .catch((err) => {
-            console.log(postId+' Not Found');
+            console.log('postId: '+postId+'\n'+err.message);
         });
 }
 
@@ -147,26 +153,42 @@ function sort(comments) {
 }
 
 function getOrCreateGithubIssue(postId, tokenJson) {
-
+    return searchIssue(postId, tokenJson)
+        .then(body => {
+            if(body['total_count'] > 0){
+                return new Promise((resolve) =>{
+                    resolve({
+                        number: body.items[0].number
+                    });
+                });
+            } else {
+                return createGithubIssue(postId, tokenJson);
+            }
+        });
 }
 
 function createGithubIssue(postId, tokenJson) {
-    const url = 'http://jojoldu.tistory.com/'+postId;
-    const options = {
-        method: 'POST',
-        uri: createIssueUrl(tokenJson),
-        body: {
-            title: url,
-            body: url
-        },
-        headers: {
-            'Authorization': 'token '+tokenJson.github.token,
-            'User-Agent': 'https://api.github.com/meta'
-        },
-        json: true
-    };
-
-    return request(options);
+    return new Promise((resolve) =>{
+        setTimeout(() => {
+            resolve();
+        }, 1000);
+    }).then(()=>{
+        const url = 'http://jojoldu.tistory.com/'+postId;
+        const options = {
+            method: 'POST',
+            uri: createIssueUrl(tokenJson),
+            body: {
+                title: url,
+                body: url
+            },
+            headers: {
+                'Authorization': 'token '+tokenJson.github.token,
+                'User-Agent': 'https://api.github.com/meta'
+            },
+            json: true
+        };
+        return request(options);
+    });
 }
 
 function createIssueUrl(tokenJson) {
@@ -178,6 +200,17 @@ function createIssueUrl(tokenJson) {
 
 function searchIssue(postId, tokenJson) {
     const url = createSearchIssueUrl(postId, tokenJson);
+    const options = {
+        method: 'GET',
+        uri: url,
+        headers: {
+            'Authorization': 'token '+tokenJson.github.token,
+            'User-Agent': 'https://api.github.com/meta'
+        },
+        json: true
+    };
+
+    return request(options);
 }
 
 function createSearchIssueUrl(postId, tokenJson) {
@@ -191,19 +224,25 @@ function createSearchIssueUrl(postId, tokenJson) {
 
 function createIssueComments(comments, tokenJson, issueNo) {
     asyncp.eachSeries(comments, (comment) => {
-        const options = {
-            method: 'POST',
-            uri: createIssueCommentUrl(tokenJson, issueNo),
-            body: {
-                body: comment.author+'\n\n'+comment.content
-            },
-            headers: {
-                'Authorization': 'token '+tokenJson.github.token,
-                'User-Agent': 'https://api.github.com/meta'
-            },
-            json: true
-        };
-        return request(options);
+        return new Promise((resolve) =>{
+            setTimeout(() => {
+                resolve();
+            }, 1000);
+        }).then(()=> {
+            const options = {
+                method: 'POST',
+                uri: createIssueCommentUrl(tokenJson, issueNo),
+                body: {
+                    body: comment.author+'\n\n'+comment.content
+                },
+                headers: {
+                    'Authorization': 'token '+tokenJson.github.token,
+                    'User-Agent': 'https://api.github.com/meta'
+                },
+                json: true
+            };
+            return request(options);
+        })
     });
 }
 
@@ -216,9 +255,74 @@ function createIssueCommentUrl(tokenJson, issueNo) {
         .replace('{github.issueNo}', issueNo);
 }
 
+
+function createSearchLastIssueUrl(tokenJson) {
+    const URL_GITHUB_SEARCH_ISSUE = 'https://api.github.com/search/issues?order=desc&q=repo:{github.owner/repo}';
+
+    return URL_GITHUB_SEARCH_ISSUE
+        .replace('{github.owner/repo}', tokenJson.github.owner + '/' + tokenJson.github.repo);
+}
+
+function cleanAll() {
+    let tokenJson;
+    readToken()
+        .then(body => {
+            tokenJson = body;
+            const url = createSearchLastIssueUrl(tokenJson);
+            const options = {
+                method: 'GET',
+                uri: url,
+                headers: {
+                    'Authorization': 'token '+tokenJson.github.token,
+                    'User-Agent': 'https://api.github.com/meta'
+                },
+                json: true
+            };
+
+            return request(options);
+        })
+        .then(body => {
+            const lastNo = body['total_count'];
+            const issueNos = [];
+            for(let i=1;i<=lastNo;i++){
+                issueNos.push(i);
+            }
+            asyncp.eachSeries(issueNos, (issueNo) => {
+                console.log(issueNo+'를 삭제합니다.');
+                const options = {
+                    method: 'PATCH',
+                    uri: createIssueUrl(tokenJson)+'/'+issueNo,
+                    body: {
+                        title: '[removed]',
+                        state: 'closed'
+                    },
+                    headers: {
+                        'Authorization': 'token '+tokenJson.github.token,
+                        'User-Agent': 'https://api.github.com/meta'
+                    },
+                    json: true
+                };
+                return request(options);
+            });
+        })
+        .catch((err) => {
+            console.log(err);
+    });
+}
+
+exports.print = function () {
+    console.log('aaa');
+};
+
+exports.cleanAll = cleanAll;
+exports.execute = execute;
+exports.createGithubIssueAndComments = createGithubIssueAndComments;
+exports.getOrCreateGithubIssue = getOrCreateGithubIssue;
 exports.createSearchIssueUrl = createSearchIssueUrl;
 exports.createIssueUrl = createIssueUrl;
 exports.createIssueCommentUrl = createIssueCommentUrl;
 exports.sort = sort;
 exports.readToken = readToken;
 exports.createGithubIssue = createGithubIssue;
+
+require('make-runnable');
