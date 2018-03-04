@@ -24,3 +24,13 @@ clone 받은 디렉토리에 token.json 을 아래 형태로 생성
   }
 }
 ```
+
+
+```bash
+npm install
+```
+
+아래를 실행하면 순차적으로 실행된다.
+```bash
+npm run execute
+```

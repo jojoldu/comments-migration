@@ -17,6 +17,9 @@ const asyncp = require('async-promises');
  *  3-3) 생성한 Github Issue ID로 댓글 생성
  *  3-4) 이슈 댓글은 부모 댓글을 보고 순서 재정렬
  */
+
+let githubApiUseCount = 1;
+const interval = 10000;
 let globalToken;
 function execute() {
     readToken()
@@ -40,11 +43,20 @@ function execute() {
         .then(posts => {
             const lastId = JSON.parse(posts).tistory.item.posts[0].id;
             const postIds = [];
-            for(let i=1; i<=lastId; i++){
+            for(let i=72; i<=lastId; i++){
                 postIds.push(i);
             }
 
             return asyncp.eachSeries(postIds, (postId) => {
+                if(githubApiUseCount % 100 === 0){
+                    return new Promise((resolve) =>{
+                        setTimeout(() => {
+                            resolve();
+                        }, 20 * 60 * 1000);
+                    }).then(() => {
+                        return createGithubIssueAndComments(postId, globalToken);
+                    })
+                }
                 return createGithubIssueAndComments(postId, globalToken);
             });
 
@@ -93,7 +105,8 @@ function createGithubIssueAndComments(postId, tokenJson) {
             console.log(tokenJson.tistory.blogName+'.tistory.com/'+postId+' Migration 성공');
         })
         .catch((err) => {
-            console.log('postId: '+postId+'\n'+err.message);
+            console.log('postId: '+postId);
+            console.log(err.message);
         });
 }
 
@@ -171,8 +184,9 @@ function createGithubIssue(postId, tokenJson) {
     return new Promise((resolve) =>{
         setTimeout(() => {
             resolve();
-        }, 1000);
+        }, interval);
     }).then(()=>{
+        githubApiUseCount++;
         const url = 'http://jojoldu.tistory.com/'+postId;
         const options = {
             method: 'POST',
@@ -227,8 +241,9 @@ function createIssueComments(comments, tokenJson, issueNo) {
         return new Promise((resolve) =>{
             setTimeout(() => {
                 resolve();
-            }, 1000);
+            }, interval);
         }).then(()=> {
+            githubApiUseCount++;
             const options = {
                 method: 'POST',
                 uri: createIssueCommentUrl(tokenJson, issueNo),
