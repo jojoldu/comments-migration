@@ -8,6 +8,7 @@
 const app = require('../app');
 const async = require('async');
 const assert = require('assert');
+const asyncp = require('async-promises');
 
 describe('app 테스트', () => {
     describe('유틸 테스트', () => {
@@ -15,7 +16,7 @@ describe('app 테스트', () => {
             const times = [1000, 500, 100];
             const callStack = [];
             async.eachSeries(times, (time, next) => {
-                setTimeout(()=>{
+                setTimeout(() => {
                     callStack.push(time);
                     return next();
                 }, time);
@@ -27,11 +28,63 @@ describe('app 테스트', () => {
             });
         });
 
+        it("async-promises.js로 동기실행", (done) => {
+            const times = [1000, 500, 100];
+            const callStack = [];
+            asyncp.eachSeries(times, (time) => {
+                return new Promise((resolve) => {
+                    setTimeout(() => {
+                        callStack.push(time);
+                        resolve();
+                    }, time);
+                });
+            })
+                .then(() => {
+                    assert.equal(callStack[0], 1000);
+                    assert.equal(callStack[1], 500);
+                    assert.equal(callStack[2], 100);
+                    done();
+                });
+        });
+
         it('인코딩', () => {
             const unicode = '\uc5ed\uc2dc \ube60\ub974\uace0 \uc0dd\uc0dd\ud55c \ud6c4\uae30 \uc798 \ubd24\uc2b5\ub2c8\ub2e4.\\r\\n\ub9e4\ubc88 \ub3d9\uc6b1\ub2d8 \ube14\ub85c\uadf8 \ud1b5\ud574\uc11c \ub3c4\uc6c0 \ub9ce\uc774 \ubc1b\uace0 \uc788\uc5c8\ub294\ub370 \uc5b4\uc81c\ub294 \uc9c1\uc811 \ub9cc\ub098\uac8c \ub418\uc11c \ubc18\uac00\uc6e0\uc2b5\ub2c8\ub2e4.\\r\\n\uc880 \ub354 \uc598\uae30\ub97c \ub098\ub204\uace0 \uc2f6\uc5c8\ub294\ub370 \uc544\uc27d\ub354\ub77c\uad6c\uc694. \ub098\uc911\uc5d0 \uc5f0\ub77d\ub4dc\ub9ac\uace0 \uc7a0\uc2e4\ub85c \ud568 \ucc3e\uc544\uac08\uaed8\uc694.^^\\r\\n';
             const buffer = new Buffer(unicode, 'utf8');
             assert(buffer.toString(), '역시 빠르고 생생한 후기 잘 봤습니다.\\r\\n매번 동욱님 블로그 통해서 도움 많이 받고 있었는데 어제는 직접 만나게 되서 반가웠습니다.\\r\\n좀 더 얘기를 나누고 싶었는데 아쉽더라구요. 나중에 연락드리고 잠실로 함 찾아갈께요.^^\\r\\n');
         });
+    });
+
+    describe('Github URL 생성', () => {
+        const tokenJson = {
+            "tistory": {
+                "blogName": "jojoldu",
+            },
+            "github": {
+                "owner": "jojoldu",
+                "repo": "blog-comments",
+            }
+        };
+
+        const postId = 265;
+        const issueNo = 1;
+
+        it("Github Search Issue URL 생성", () => {
+            const url = app.createSearchIssueUrl(postId, tokenJson);
+            assert.equal(url, 'https://api.github.com/search/issues?q=repo:jojoldu/blog-comments+http://jojoldu.tistory.com/265 in:title');
+        });
+
+        it("Github Issue Create URL 생성", () => {
+            const url = app.createIssueUrl(tokenJson);
+            assert.equal(url, 'https://api.github.com/repos/jojoldu/blog-comments/issues');
+        });
+
+        it("Github Issue Comments Create URL 생성", () => {
+            const url = app.createIssueCommentUrl(tokenJson, issueNo);
+            assert.equal(url, 'https://api.github.com/repos/jojoldu/blog-comments/issues/1/comments');
+        });
+    });
+
+    describe('모듈 테스트', () => {
 
         it('시간순 정렬을 parentId를 기준으로 재정렬된다.', () => {
             const comments = [

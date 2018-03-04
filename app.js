@@ -7,11 +7,7 @@
 const request = require('request-promise');
 const fs = require('fs-extra');
 const async = require('async');
-
-const URL_TISTORY_GET_POSTS = 'https://www.tistory.com/apis/post/list';
-const URL_TISTORY_GET_COMMENTS = 'https://www.tistory.com/apis/comment/list';
-const URL_GITHUB_CREATE_ISSUE = 'https://api.github.com/repos/{github.owner}/{github.repo}/issues';
-const URL_GITHUB_CREATE_ISSUE_COMMENT = 'https://api.github.com/repos/{github.owner}/{github.repo}/issues/{github.issueNo}/comments';
+const asyncp = require('async-promises');
 
 /**
  * 1. Tistory에서 가장 최신 포스팅 ID Get
@@ -29,6 +25,7 @@ function execute() {
 
             setGlobalToken(tokenJson);
 
+            const URL_TISTORY_GET_POSTS = 'https://www.tistory.com/apis/post/list';
             const options = {
                 method: 'GET',
                 uri: URL_TISTORY_GET_POSTS,
@@ -72,14 +69,22 @@ function setGlobalToken(tokenJson) {
 }
 
 function createGithubIssueAndComments(postId, tokenJson) {
+    let comments;
     return getTistoryComments(postId, tokenJson)
         .then(body => {
-            const comments = sort(body.tistory.item.comments);
-            console.log(JSON.stringify(comments));
+            comments = sort(body.tistory.item.comments);
             /**
              * 1) Github 이슈 생성
              * 2) comments로 이슈 댓글 추가
              */
+            return getOrCreateGithubIssue(postId, tokenJson);
+        })
+        .then(body => {
+            const issueNo = body.number;
+            return createIssueComments(comments, tokenJson, issueNo);
+        })
+        .then(body => {
+            console.log(tokenJson.tistory.blogName+'.tistory.com/'+postId+' Migration 성공');
         })
         .catch((err) => {
             console.log(postId+' Not Found');
@@ -87,6 +92,7 @@ function createGithubIssueAndComments(postId, tokenJson) {
 }
 
 function getTistoryComments(postId, tokenJson) {
+    const URL_TISTORY_GET_COMMENTS = 'https://www.tistory.com/apis/comment/list';
     const options = {
         method: 'GET',
         uri: URL_TISTORY_GET_COMMENTS,
@@ -110,8 +116,8 @@ function sort(comments) {
 
         return {
             "id": comment.id,
-            "name": toUtf8(comment.name),
-            "comment": toUtf8(comment.comment),
+            "author": '작성자: '+toUtf8(comment.name),
+            "content": toUtf8(comment.comment),
             "child": []
         }
     }
@@ -140,6 +146,10 @@ function sort(comments) {
     return flatArray;
 }
 
+function getOrCreateGithubIssue(postId, tokenJson) {
+
+}
+
 function createGithubIssue(postId, tokenJson) {
     const url = 'http://jojoldu.tistory.com/'+postId;
     const options = {
@@ -160,26 +170,55 @@ function createGithubIssue(postId, tokenJson) {
 }
 
 function createIssueUrl(tokenJson) {
+    const URL_GITHUB_CREATE_ISSUE = 'https://api.github.com/repos/{github.owner}/{github.repo}/issues';
     return URL_GITHUB_CREATE_ISSUE
         .replace('{github.owner}', tokenJson.github.owner)
         .replace('{github.repo}', tokenJson.github.repo);
 }
 
-function createIssueComments(comments, tokenJson, issueNo) {
-    async.eachSeries(comments, (comment, next) => {
+function searchIssue(postId, tokenJson) {
+    const url = createSearchIssueUrl(postId, tokenJson);
+}
 
-    }, () => {
+function createSearchIssueUrl(postId, tokenJson) {
+    const URL_GITHUB_SEARCH_ISSUE = 'https://api.github.com/search/issues?q=repo:{github.owner/repo}+http://{tistory.blogName}.tistory.com/{postId} in:title';
+
+    return URL_GITHUB_SEARCH_ISSUE
+        .replace('{github.owner/repo}', tokenJson.github.owner+'/'+tokenJson.github.repo)
+        .replace('{tistory.blogName}', tokenJson.tistory.blogName)
+        .replace('{postId}', postId);
+}
+
+function createIssueComments(comments, tokenJson, issueNo) {
+    asyncp.eachSeries(comments, (comment) => {
+        const options = {
+            method: 'POST',
+            uri: createIssueCommentUrl(tokenJson, issueNo),
+            body: {
+                body: comment.author+'\n\n'+comment.content
+            },
+            headers: {
+                'Authorization': 'token '+tokenJson.github.token,
+                'User-Agent': 'https://api.github.com/meta'
+            },
+            json: true
+        };
+        return request(options);
     });
 }
 
 function createIssueCommentUrl(tokenJson, issueNo) {
+    const URL_GITHUB_CREATE_ISSUE_COMMENT = 'https://api.github.com/repos/{github.owner}/{github.repo}/issues/{github.issueNo}/comments';
+
     return URL_GITHUB_CREATE_ISSUE_COMMENT
         .replace('{github.owner}', tokenJson.github.owner)
         .replace('{github.repo}', tokenJson.github.repo)
         .replace('{github.issueNo}', issueNo);
 }
 
-
+exports.createSearchIssueUrl = createSearchIssueUrl;
+exports.createIssueUrl = createIssueUrl;
+exports.createIssueCommentUrl = createIssueCommentUrl;
 exports.sort = sort;
 exports.readToken = readToken;
 exports.createGithubIssue = createGithubIssue;
