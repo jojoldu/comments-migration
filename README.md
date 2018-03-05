@@ -34,3 +34,16 @@ npm install
 ```bash
 npm run execute
 ```
+
+## 주의사항
+
+Github에선 Create API를 빠르게 많이 사용하면 (대략 2분에 100건 추측) API 사용 제한을 잠시 걸어둠  
+아래와 같은 메세지가 보이면 1~2시간 뒤에 다시 실행해야함
+
+```javascript
+(node:24540) UnhandledPromiseRejectionWarning: Unhandled promise rejection (rejection id: 1): StatusCodeError: 403 - {"message":"You have triggered an abuse detection mechanism and have been temporarily blocked from content creation. Please retry your request again later.","documentation_url":"https://developer.github.com/v3/#abuse-rate-limits"}
+```
+
+아래위치의 ```let i=1```을 **가장 마지막에 실행된 postId로 교체해서 다시 실행**한다.
+
+![index변경](./images/index변경.png)

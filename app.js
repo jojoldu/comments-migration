@@ -43,20 +43,11 @@ function execute() {
         .then(posts => {
             const lastId = JSON.parse(posts).tistory.item.posts[0].id;
             const postIds = [];
-            for(let i=72; i<=lastId; i++){
+            for(let i=1; i<=lastId; i++){
                 postIds.push(i);
             }
 
             return asyncp.eachSeries(postIds, (postId) => {
-                if(githubApiUseCount % 100 === 0){
-                    return new Promise((resolve) =>{
-                        setTimeout(() => {
-                            resolve();
-                        }, 20 * 60 * 1000);
-                    }).then(() => {
-                        return createGithubIssueAndComments(postId, globalToken);
-                    })
-                }
                 return createGithubIssueAndComments(postId, globalToken);
             });
 
